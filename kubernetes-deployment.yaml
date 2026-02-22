@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pocketpaw
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pocketpaw-config
+  namespace: pocketpaw
+data:
+  POCKETPAW_WEB_PORT: "8888"
+  POCKETPAW_FILE_JAIL_PATH: "/app"
+  OLLAMA_HOST: "http://ollama:11434"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pocketpaw-secrets
+  namespace: pocketpaw
+type: Opaque
+stringData:
+  ANTHROPIC_API_KEY: "your-anthropic-key-here"
+  OPENAI_API_KEY: "your-openai-key-here"
+  GITHUB_TOKEN: "your-github-token-here"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pocketpaw
+  namespace: pocketpaw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pocketpaw
+  template:
+    metadata:
+      labels:
+        app: pocketpaw
+    spec:
+      containers:
+      - name: pocketpaw
+        image: ghcr.io/vaibhavee89/pocketpaw:latest
+        ports:
+        - containerPort: 8888
+        envFrom:
+        - configMapRef:
+            name: pocketpaw-config
+        - secretRef:
+            name: pocketpaw-secrets
+        volumeMounts:
+        - name: data
+          mountPath: /root/.pocketpaw
+        - name: skills
+          mountPath: /root/.claude/skills
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: pocketpaw-data
+      - name: skills
+        persistentVolumeClaim:
+          claimName: pocketpaw-skills
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pocketpaw
+  namespace: pocketpaw
+spec:
+  selector:
+    app: pocketpaw
+  ports:
+  - port: 8888
+    targetPort: 8888
+  type: LoadBalancer
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pocketpaw-data
+  namespace: pocketpaw
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pocketpaw-skills
+  namespace: pocketpaw
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
